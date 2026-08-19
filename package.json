@@ -1,0 +1,30 @@
+{
+  "name": "smart-student-planner",
+  "version": "1.0.0",
+  "description": "AI service for Smart Student Planner application",
+  "homepage": "https://github.com/achille1789/smart-student-planner#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/achille1789/smart-student-planner.git"
+  },
+  "license": "ISC",
+  "author": "achille1789",
+  "scripts": {
+    "debug": "npx tsx --env-file=.env debug.ts",
+    "build": "npm run clean && node build.js",
+    "clean": "rimraf dist",
+    "tf:init": "cd iac && dotenv -e ../.env -- terraform init",
+    "tf:plan": "cd iac && dotenv -e ../.env -- terraform plan",
+    "tf:apply": "cd iac && dotenv -e ../.env -- terraform apply -auto-approve",
+    "deploy": "npm run build && npm run tf:init && npm run tf:apply"
+  },
+  "devDependencies": {
+    "@jahed/terraform": "^1.15.9",
+    "@types/aws-lambda": "^8.10.162",
+    "@types/node": "^26.2.0",
+    "dotenv-cli": "^11.0.0",
+    "esbuild": "^0.28.2",
+    "rimraf": "^6.1.3",
+    "typescript": "^7.0.2"
+  }
+}
