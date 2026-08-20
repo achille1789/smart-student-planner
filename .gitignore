@@ -4,3 +4,4 @@
 .terraform.lock.hcl
 node_modules
 dist
+dist.zip

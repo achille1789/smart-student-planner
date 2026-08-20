@@ -108,7 +108,7 @@ resource "aws_lambda_function" "ai_assistant" {
   runtime          = local.lambda_runtime
   filename         = data.archive_file.lambda_zip.output_path
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
-  timeout          = 30
+  timeout          = 120
   memory_size      = 256
 
   environment {
