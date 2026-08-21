@@ -101,6 +101,7 @@ Rules:
 - "priority" must be exactly one of: ${PRIORITIES.join(', ')}.
 - "workload" must be exactly one of: ${WORKLOADS.join(', ')}.
 - "description" should be one or two sentences that clearly describe what the student needs to do.
+- ALL text fields ("title", "description", "category", "priority", "workload") MUST be written in ENGLISH ONLY, regardless of the language of the student's goal. Do NOT use any other language or script (no Chinese, Spanish, Arabic, etc.). If the goal is written in another language, translate it internally and produce the plan in English.
 - Return valid JSON only.`;
 
   const userPrompt = `Student goal: ${payload.goal}
@@ -108,7 +109,7 @@ Goal due date: ${payload.due_date}
 Today's date: ${today}
 Days available: ${daysAvailable}
 
-Build a realistic study plan of EXACTLY 3 tasks. Remember: every task must have a DIFFERENT due_date in DD/MM/YYYY format, spread across the available time, and priorities and workloads must vary between tasks (at least 2 distinct values each). Return only the JSON object described in the system message.`;
+Build a realistic study plan of EXACTLY 3 tasks, written entirely in ENGLISH. Remember: every task must have a DIFFERENT due_date in DD/MM/YYYY format, spread across the available time, and priorities and workloads must vary between tasks (at least 2 distinct values each). Return only the JSON object described in the system message.`;
 
   const resp = await fetch(OPENROUTER_URL, {
     method: 'POST',
