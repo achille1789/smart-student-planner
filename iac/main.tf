@@ -125,6 +125,12 @@ resource "aws_lambda_function" "ai_assistant" {
 resource "aws_api_gateway_rest_api" "api" {
   name        = "${local.resources_prefix}-api"
   description = "Smart Student Planner API"
+
+  # Regional endpoint bypasses the managed CloudFront layer (which has a
+  # non-configurable 30s timeout) so the Lambda integration can run up to 2 min.
+  endpoint_configuration {
+    types = ["REGIONAL"]
+  }
 }
 
 # /ssp resource
@@ -158,6 +164,7 @@ resource "aws_api_gateway_integration" "lambda_integration" {
   integration_http_method = "POST"
   type                    = "AWS_PROXY"
   uri                     = aws_lambda_function.ai_assistant.invoke_arn
+  timeout_milliseconds    = 120000
 }
 
 # Lambda permission for API Gateway

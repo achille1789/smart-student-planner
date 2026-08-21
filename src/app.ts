@@ -2,7 +2,7 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
-const MODEL = 'openai/gpt-oss-20b:free';
+const MODEL = 'openrouter/auto-beta';
 
 const CATEGORIES = [
   '📚 Coursework',
@@ -41,7 +41,7 @@ const jsonResponse = (statusCode: number, body: unknown): APIGatewayProxyResult 
 });
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-  console.log('Received event:', JSON.stringify(event, null, 2));
+  console.log('Received event:', JSON.stringify(event.body, null, 2));
 
   // 1. Parse and validate the incoming request body
   let payload: GoalRequest;
@@ -59,6 +59,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
   // 2. Ask the AI to break the goal down into tasks
   try {
     const tasks = await _breakDownGoal(payload);
+    console.log('Generated tasks:', JSON.stringify(tasks, null, 2));
     return jsonResponse(200, { tasks });
   } catch (err: any) {
     console.error('Error generating tasks:', err);
@@ -82,7 +83,7 @@ You MUST return ONLY a valid JSON object with this exact shape and nothing else 
     {
       "title": "string",
       "description": "string",
-      "due_date": "YYYY-MM-DD",
+      "due_date": "DD/MM/YYYY",
       "category": "one of the allowed categories",
       "priority": "Low | Medium | High",
       "workload": "Light (<1 hr) | Moderate (1-3 hrs) | Heavy (3+ hrs)"
@@ -91,9 +92,9 @@ You MUST return ONLY a valid JSON object with this exact shape and nothing else 
 }
 
 Rules:
-- Produce between 3 and 4 tasks total, ordered chronologically (earliest due_date first).
+- Produce EXACTLY 3 tasks, ordered chronologically (earliest due_date first).
 - Tasks must form a realistic study plan: foundational/preparation work comes first, deeper practice in the middle, and final review/consolidation just before the goal's due date.
-- DUE DATES MUST BE DIFFERENT for every task. Do NOT reuse the same date. Spread them evenly between today (${today}) and the goal due date (${payload.due_date}). You have roughly ${daysAvailable} day(s) to plan across. The LAST task's due_date should be on or a day or two before the goal due date, never after.
+- DUE DATES MUST BE DIFFERENT for every task and MUST use the format DD/MM/YYYY (e.g. 07/03/2026). Do NOT reuse the same date and do NOT use any other format. Spread them evenly between today (${today}) and the goal due date (${payload.due_date}). You have roughly ${daysAvailable} day(s) to plan across. The LAST task's due_date should be on or a day or two before the goal due date, never after.
 - PRIORITIES MUST VARY across the tasks. Do NOT set every task to the same priority. Typically foundational or final-review tasks are "High", intermediate reinforcement tasks are "Medium", and optional/lighter tasks are "Low". Use at least 2 different priority values across the plan.
 - WORKLOADS MUST VARY across the tasks. Do NOT set every task to the same workload. Mix "Light (<1 hr)", "Moderate (1-3 hrs)" and "Heavy (3+ hrs)" based on how much effort each task realistically requires (e.g. quick summaries are Light, deep practice or mock exams are Heavy). Use at least 2 different workload values across the plan.
 - "category" must be exactly one of: ${CATEGORIES.join(', ')}.
@@ -107,7 +108,7 @@ Goal due date: ${payload.due_date}
 Today's date: ${today}
 Days available: ${daysAvailable}
 
-Build a realistic study plan of 3 or 4 tasks. Remember: every task must have a DIFFERENT due_date spread across the available time, and priorities and workloads must vary between tasks (at least 2 distinct values each). Return only the JSON object described in the system message.`;
+Build a realistic study plan of EXACTLY 3 tasks. Remember: every task must have a DIFFERENT due_date in DD/MM/YYYY format, spread across the available time, and priorities and workloads must vary between tasks (at least 2 distinct values each). Return only the JSON object described in the system message.`;
 
   const resp = await fetch(OPENROUTER_URL, {
     method: 'POST',
@@ -146,7 +147,24 @@ Build a realistic study plan of 3 or 4 tasks. Remember: every task must have a D
   }
 
   // Normalise/validate each task defensively so the client always gets valid values
-  const normalised = tasks.slice(0, 4).map((t) => _sanitiseTask(t, payload.due_date));
+  let normalised = tasks.slice(0, 3).map((t) => _sanitiseTask(t, payload.due_date));
+
+  // Ensure we always return exactly 3 tasks: pad with sensible fillers if the AI returned fewer
+  while (normalised.length < 3) {
+    normalised.push(
+      _sanitiseTask(
+        {
+          title: `Follow-up study task ${normalised.length + 1}`,
+          description: 'Continue working on the goal with focused study or practice.',
+          due_date: payload.due_date,
+          category: '📚 Coursework',
+          priority: 'Medium',
+          workload: 'Moderate (1-3 hrs)',
+        },
+        payload.due_date,
+      ),
+    );
+  }
 
   // Safety net: if the AI ignored the instructions and returned identical due dates,
   // spread them evenly between today and the goal due date so tasks are actionable in order.
@@ -162,7 +180,8 @@ const _spreadDueDatesIfIdentical = (tasks: Task[], goalDueDate: string): Task[] 
 
   const today = new Date();
   today.setUTCHours(0, 0, 0, 0);
-  const goal = new Date(goalDueDate);
+  const goal = _parseGoalDate(goalDueDate);
+  if (!goal) return tasks;
   goal.setUTCHours(0, 0, 0, 0);
 
   const totalMs = goal.getTime() - today.getTime();
@@ -173,8 +192,23 @@ const _spreadDueDatesIfIdentical = (tasks: Task[], goalDueDate: string): Task[] 
 
   return tasks.map((t, idx) => {
     const d = new Date(today.getTime() + step * (idx + 1));
-    return { ...t, due_date: d.toISOString().slice(0, 10) };
+    return { ...t, due_date: _formatDDMMYYYY(d) };
   });
+};
+
+// Accepts YYYY-MM-DD or DD/MM/YYYY inputs (the incoming goal due_date can be either)
+const _parseGoalDate = (raw: string): Date | null => {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return new Date(raw);
+  const m = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (m) return new Date(`${m[3]}-${m[2]}-${m[1]}`);
+  return null;
+};
+
+const _formatDDMMYYYY = (d: Date): string => {
+  const dd = String(d.getUTCDate()).padStart(2, '0');
+  const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const yyyy = d.getUTCFullYear();
+  return `${dd}/${mm}/${yyyy}`;
 };
 
 // Extract JSON from the AI response even if it comes wrapped in ```json ... ``` fences
@@ -195,7 +229,7 @@ const _sanitiseTask = (t: any, goalDueDate: string): Task => {
   const category = CATEGORIES.includes(t?.category) ? t.category : '📚 Coursework';
   const priority = PRIORITIES.includes(t?.priority) ? t.priority : 'Medium';
   const workload = WORKLOADS.includes(t?.workload) ? t.workload : 'Moderate (1-3 hrs)';
-  const due_date = /^\d{4}-\d{2}-\d{2}$/.test(t?.due_date) ? t.due_date : goalDueDate;
+  const due_date = _normaliseDueDate(t?.due_date, goalDueDate);
 
   return {
     title: String(t?.title ?? 'Untitled task').slice(0, 200),
@@ -206,3 +240,15 @@ const _sanitiseTask = (t: any, goalDueDate: string): Task => {
     workload,
   };
 };
+
+// Force any incoming date into DD/MM/YYYY; fall back to the goal due date if unparseable
+const _normaliseDueDate = (raw: any, goalDueDate: string): string => {
+  if (typeof raw === 'string') {
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(raw)) return raw;
+    const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (iso) return `${iso[3]}/${iso[2]}/${iso[1]}`;
+  }
+  const goal = _parseGoalDate(goalDueDate);
+  return goal ? _formatDDMMYYYY(goal) : goalDueDate;
+};
+
