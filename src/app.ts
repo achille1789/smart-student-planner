@@ -100,7 +100,13 @@ Rules:
 - "category" must be exactly one of: ${CATEGORIES.join(', ')}.
 - "priority" must be exactly one of: ${PRIORITIES.join(', ')}.
 - "workload" must be exactly one of: ${WORKLOADS.join(', ')}.
-- "description" should be one or two sentences that clearly describe what the student needs to do.
+- "description" MUST be written as a SMART objective — Specific, Measurable, Achievable, Relevant and Time-bound. Concretely, every description must:
+  * State exactly WHAT the student will do (Specific, e.g. "Read chapters 1–3 of Tanenbaum" not "study networking").
+  * Include a QUANTIFIABLE outcome or amount (Measurable, e.g. "complete 20 subnetting exercises", "produce a 1-page summary", "score ≥ 70% on a mock paper").
+  * Be realistically doable within the task's workload band (Achievable).
+  * Directly contribute to the overall student goal (Relevant — reference the topic/skill from the goal).
+  * Be Time-bound implicitly through the task's own due_date field. Do NOT restate the date, day or month inside the description text — the due_date field already carries that information. Instead convey urgency with phrases like "before the deadline", "ahead of the next task" or "by the end of this task's window".
+  Keep it to 1–2 concise sentences, ≤ 300 characters, plain prose (no bullet points, no markdown).
 - ALL text fields ("title", "description", "category", "priority", "workload") MUST be written in ENGLISH ONLY, regardless of the language of the student's goal. Do NOT use any other language or script (no Chinese, Spanish, Arabic, etc.). If the goal is written in another language, translate it internally and produce the plan in English.
 - Return valid JSON only.`;
 
@@ -109,7 +115,7 @@ Goal due date: ${payload.due_date}
 Today's date: ${today}
 Days available: ${daysAvailable}
 
-Build a realistic study plan of EXACTLY 3 tasks, written entirely in ENGLISH. Remember: every task must have a DIFFERENT due_date in DD/MM/YYYY format, spread across the available time, and priorities and workloads must vary between tasks (at least 2 distinct values each). Return only the JSON object described in the system message.`;
+Build a realistic study plan of EXACTLY 3 tasks, written entirely in ENGLISH. Every task "description" MUST be a SMART objective (Specific, Measurable, Achievable, Relevant, Time-bound) that references the goal's topic and includes a concrete, quantifiable outcome. Do NOT restate any date, day or month inside the "description" — the "due_date" field already conveys the deadline. Remember: every task must have a DIFFERENT due_date in DD/MM/YYYY format, spread across the available time, and priorities and workloads must vary between tasks (at least 2 distinct values each). Return only the JSON object described in the system message.`;
 
   const resp = await fetch(OPENROUTER_URL, {
     method: 'POST',
